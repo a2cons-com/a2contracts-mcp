@@ -1,4 +1,12 @@
-# A2 Contracts MCP server
+# A2 Contracts MCP server — RETIRED
+
+> **Retired 2026-09-26.** A2 Contracts now serves MCP itself at
+> `https://contracts.a2cons.com/mcp` (sign in with your own account,
+> per-person permissions, nothing to install). Add it as a remote /
+> custom connector in Claude (claude.ai, Claude Desktop) or with
+> `claude mcp add --transport http a2contracts https://contracts.a2cons.com/mcp`
+> in Claude Code. This stdio server is no longer maintained.
+
 
 Lets an external agent (Claude Code, Claude Desktop, Gemini, anything
 that speaks MCP) work with the app through its own REST API: read
