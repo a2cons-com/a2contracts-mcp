@@ -100,6 +100,12 @@ used past that line either.
 
 ## Tools
 
+Start here: `describe_data_model` (also the `a2contracts://data-model`
+resource) -- one page on how projects, estimates, the schedule, plans,
+photos, reports, files and money relate, which endpoints `api_get` can
+read for each, and what an AI may change. Same text as the app's remote
+MCP endpoint.
+
 Read: `list_projects`, `list_plan_sheets(project, collection?)`
 (collections → folders → sheets, each with its `sheet_id`, number,
 title, current version), `get_sheet_info(sheet_id)` (size, scale in
@@ -111,15 +117,18 @@ Sheets are the app's own stored pages (one per sheet, the current
 version) since the app took over plan storage from Dropbox on
 2026-09-17 -- there is no path/page any more, only `sheet_id`.
 
-Draft: `create_layer`, `create_markups(sheet_id, layer_id, markups,
-image_mapping)` (points in PDF points, or image pixels with the mapping
+Draft: `create_layer`, `create_markups(sheet_id, markups, layer_id?,
+image_mapping)` (without a layer the app picks the project's first
+unlocked one) (points in PDF points, or image pixels with the mapping
 `render_sheet` returned), `update_markup`, `delete_markups`,
 `clear_my_markups`, `set_sheet_scale` (needs publish rights).
 
 Schedule (draft-mode by nature -- dates and sequencing, nothing
 financial): `get_schedule(project)` (every task incl. each line item's
 own row, every dependency), `update_schedule_tasks(updates)` (dates,
-duration, status, milestone flag, ignored, name), `create_milestones(
+duration, status, milestone flag, ignored, name, and for a long-lead item
+`lead_time_days` + `ordered_on`; `get_schedule` also shows when a task
+actually started/finished), `create_milestones(
 project, items)`, `delete_schedule_tasks(ids)` (standalone rows only; a
 line item's task is `ignored`, never deleted), `set_dependencies(
 [{task, depends_on, dependency_type FS|SS|FF|SF, lag_days}])` (cycles

@@ -69,6 +69,26 @@ def _err(exc: Exception) -> str:
 
 # --- Reading -----------------------------------------------------------------
 
+@mcp.resource('a2contracts://data-model', name='A2 Contracts data model', mime_type='text/plain',
+              description='How projects, estimates, change orders, schedules, plans/sheets/markups, photos, reports, permits and money relate; what an AI client may and may not change.')
+def data_model_resource() -> str:
+    from .data_model import DATA_MODEL
+
+    return DATA_MODEL
+
+
+@mcp.tool()
+def describe_data_model() -> str:
+    """One page on how things relate in A2 Contracts (projects, the
+    estimate/proposal and change orders, the schedule, plans -> sheets
+    -> versions -> markups, photos, reports, permits, money) and which of
+    them an AI client may change. Read it once before a task that spans
+    areas."""
+    from .data_model import DATA_MODEL
+
+    return DATA_MODEL
+
+
 @mcp.tool()
 def list_projects(include_archived: bool = False) -> str:
     """Projects the signed-in user can see: id (use this `id` everywhere),
@@ -252,9 +272,11 @@ KINDS = {'pen', 'highlighter', 'line', 'arrow', 'rect', 'ellipse', 'cloud', 'pol
 
 
 @mcp.tool()
-def create_markups(sheet_id: int, layer_id: int, markups: list[dict], image_mapping: dict | None = None) -> str:
+def create_markups(sheet_id: int, markups: list[dict], layer_id: int | None = None, image_mapping: dict | None = None) -> str:
     """Draft markups on a sheet (they stay private to the signed-in user
     until a person publishes them in the app -- there is no publish tool).
+    `layer_id` is optional: without it the app uses the project's first
+    unlocked layer (a named suggestions layer is still clearer).
 
     Each item: {"kind": one of pen|highlighter|line|arrow|rect|ellipse|
     cloud|polygon|text|length|multiline|area|count|marker|stamp,
@@ -294,9 +316,11 @@ def create_markups(sheet_id: int, layer_id: int, markups: list[dict], image_mapp
                 meta.setdefault('number', marker_number)
                 meta.setdefault('status', 'open')
             body = {
-                'sheet': sheet_id, 'layer': layer_id, 'kind': kind, 'geometry': {'points': points},
+                'sheet': sheet_id, 'kind': kind, 'geometry': {'points': points},
                 'style': item.get('style') or {}, 'label': item.get('label', ''), 'subject': item.get('subject', ''), 'meta': meta,
             }
+            if layer_id:
+                body['layer'] = layer_id
             try:
                 created.append(c.post('/api/plan-markups/', json=body))
             except ApiError as exc:
@@ -409,7 +433,10 @@ def get_estimate(project: int) -> str:
 # records a financial agreement), so the tools may write freely; the app's
 # own `schedule` RBAC area still decides per user.
 
-SCHEDULE_TASK_FIELDS = ('name', 'description', 'start_date', 'end_date', 'duration_days', 'is_milestone', 'status', 'ignored', 'sort_order')
+SCHEDULE_TASK_FIELDS = (
+    'name', 'description', 'start_date', 'end_date', 'duration_days', 'is_milestone', 'status', 'ignored', 'sort_order',
+    'lead_time_days', 'ordered_on',
+)
 
 
 @mcp.tool()
@@ -417,7 +444,10 @@ def get_schedule(project: int) -> str:
     """The project's construction schedule: every task (id, name,
     line_item + line_item_title when it is a line item's own work, else a
     standalone milestone, start_date, end_date, duration_days,
-    is_milestone, status not_started|in_progress|done, ignored,
+    is_milestone, status not_started|in_progress|done, started_at /
+    completed_at (when it actually started / finished, read-only),
+    lead_time_days + ordered_on (a long-lead item: order it that many days
+    before start_date), ignored,
     subcontract, sort_order) and every dependency (id, task, depends_on,
     dependency_type FS|SS|FF|SF, lag_days). Listing keeps line-item rows
     in sync automatically -- a task exists for each line item already.
@@ -426,7 +456,10 @@ def get_schedule(project: int) -> str:
         c = client()
         tasks = c.get('/api/schedule-tasks/', params={'project': project})
         deps = c.get('/api/schedule-task-dependencies/', params={'project': project})
-        keep = ('id', 'name', 'line_item', 'line_item_title', 'description', 'start_date', 'end_date', 'duration_days', 'is_milestone', 'status', 'ignored', 'subcontract', 'sort_order')
+        keep = (
+            'id', 'name', 'line_item', 'line_item_title', 'description', 'start_date', 'end_date', 'duration_days', 'is_milestone',
+            'status', 'started_at', 'completed_at', 'lead_time_days', 'ordered_on', 'ignored', 'subcontract', 'sort_order',
+        )
         return _ok({
             'project': project,
             'tasks': [{k: t.get(k) for k in keep} for t in sorted(tasks, key=lambda t: (t.get('sort_order') or 0, t['id']))],
@@ -441,7 +474,9 @@ def get_schedule(project: int) -> str:
 def update_schedule_tasks(updates: list[dict]) -> str:
     """Change several tasks at once. Each entry: {id, and any of name,
     description, start_date, end_date, duration_days, is_milestone,
-    status, ignored, sort_order}. Returns the updated rows, plus errors
+    status, ignored, sort_order, lead_time_days (days before start_date the
+    material must be ordered; null for none), ordered_on (YYYY-MM-DD, once
+    ordered)}. Returns the updated rows, plus errors
     per id where one was refused."""
     try:
         c = client()
